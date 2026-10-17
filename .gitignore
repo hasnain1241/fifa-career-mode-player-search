@@ -1,0 +1,23 @@
+# Raw data and caches
+raw/
+data/
+cache/
+soccerdata/
+*.csv
+*.csv.gz
+*.parquet
+
+# Python
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Secrets
+.env
+kaggle.json
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/
