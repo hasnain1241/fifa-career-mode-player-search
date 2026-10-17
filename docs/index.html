@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Career Mode Scout</title>
+<meta name="description" content="Find players like your target across the Premier League, La Liga and Bundesliga. Per-90 stats, percentiles and similarity within position group.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap header-row">
+    <div>
+      <h1>Career Mode Scout</h1>
+      <p class="sub">Find players like your target in the Premier League, La Liga and Bundesliga.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" id="tab-scout" aria-selected="true" aria-controls="view-scout" data-mode="scout">Scout</button>
+      <button role="tab" id="tab-sign" aria-selected="false" aria-controls="view-sign" data-mode="sign" tabindex="-1">Find a signing</button>
+      <button role="tab" id="tab-about" aria-selected="false" aria-controls="view-about" data-mode="about" tabindex="-1">About</button>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <p id="load-status" class="status" role="status">Loading data...</p>
+
+  <div id="workspace" class="workspace" hidden>
+    <div class="col-main">
+      <section id="view-scout" class="card" role="tabpanel" aria-labelledby="tab-scout">
+        <h2>Pick a reference player</h2>
+        <div class="combo">
+          <label for="search">Search by name (accents optional)</label>
+          <input id="search" type="text" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-list" aria-autocomplete="list" placeholder="Try odegaard, rodri, haaland">
+          <ul id="search-list" role="listbox" aria-label="Matching players" hidden></ul>
+        </div>
+        <p class="examples" id="examples"></p>
+      </section>
+
+      <section id="view-sign" class="card" role="tabpanel" aria-labelledby="tab-sign" hidden>
+        <h2>Find a signing for my club</h2>
+        <div class="form-grid">
+          <div><label for="s-club">My club</label><select id="s-club"></select></div>
+          <div><label for="s-group">Position group</label><select id="s-group"></select></div>
+          <div><label for="s-role">Role</label><select id="s-role"></select></div>
+          <div><label for="s-sort">Sort by</label>
+            <select id="s-sort">
+              <option value="pct">Best average percentile</option>
+              <option value="value">Most undervalued</option>
+              <option value="young">Youngest</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section id="filters" class="card" aria-labelledby="filters-h">
+        <div class="card-head">
+          <h2 id="filters-h">Filters</h2>
+          <button type="button" id="f-reset" class="link-btn">Reset</button>
+        </div>
+        <div class="form-grid">
+          <div>
+            <label for="f-age">Max age: <output id="f-age-out" for="f-age"></output></label>
+            <input id="f-age" type="range" min="17" max="40" step="1" value="40">
+          </div>
+          <div>
+            <label for="f-value">Max market value: <output id="f-value-out" for="f-value"></output></label>
+            <input id="f-value" type="range" min="0" max="17" step="1" value="17">
+          </div>
+          <div>
+            <label for="f-minutes">Min minutes: <output id="f-minutes-out" for="f-minutes"></output></label>
+            <input id="f-minutes" type="range" min="450" max="3000" step="50" value="450">
+          </div>
+          <div>
+            <label for="f-contract">Contract expiring</label>
+            <select id="f-contract">
+              <option value="0">Any</option>
+              <option value="6">Within 6 months</option>
+              <option value="12">Within 12 months</option>
+              <option value="18">Within 18 months</option>
+              <option value="24">Within 24 months</option>
+            </select>
+          </div>
+        </div>
+        <fieldset class="leagues">
+          <legend>Leagues</legend>
+          <label class="check"><input type="checkbox" name="league" value="Premier League" checked> Premier League</label>
+          <label class="check"><input type="checkbox" name="league" value="La Liga" checked> La Liga</label>
+          <label class="check"><input type="checkbox" name="league" value="Bundesliga" checked> Bundesliga</label>
+        </fieldset>
+      </section>
+
+      <section id="results" class="card" aria-live="polite">
+        <div class="card-head">
+          <h2 id="results-h">Similar players</h2>
+          <span id="results-count" class="muted"></span>
+        </div>
+        <p id="results-note" class="note" hidden></p>
+        <ol id="results-list" class="plist"></ol>
+      </section>
+    </div>
+
+    <aside class="col-side" aria-label="Player detail">
+      <section class="card" id="profile-card">
+        <div id="profile"><p class="muted">Search for a player, or open one from Find a signing.</p></div>
+      </section>
+      <section class="card" id="radar-card" hidden>
+        <div class="card-head">
+          <h2>Percentile profile</h2>
+          <button type="button" id="clear-compare" class="link-btn" hidden>Clear comparison</button>
+        </div>
+        <div class="radar-box"><canvas id="radar" role="img" aria-label="Radar chart of percentile ranks within position group"></canvas></div>
+        <p class="note small">Percentile of the raw per-90 value within the position group. For fouls, cards and goals conceded a high percentile means more, which is not necessarily good.</p>
+        <table class="stat-table" id="stat-table"></table>
+      </section>
+    </aside>
+  </div>
+
+  <section id="view-about" class="card about" role="tabpanel" aria-labelledby="tab-about" hidden>
+    <h2>About</h2>
+    <h3>How it works</h3>
+    <p>Counting stats are converted to per-90 rates and pooled over each player's latest two qualifying seasons (at least 450 minutes per season). Players are compared only inside their position group (goalkeeper, centre-back, full-back, DM/CM, AM/winger, striker). Each stat is turned into a percentile within its group for the radar. Similarity is computed on standardised stats: the average gap in standard deviations across the stats two players share is mapped to a 0 to 1 score, <code>1 / (1 + gap)</code>. Roles come from a simple KMeans clustering inside each group.</p>
+    <p>The similarity percentage is a relative ranking, not "percent identical". Even the best matches are often around 50 to 70 percent.</p>
+    <p>Find a signing ranks players from the filtered pool by average percentile, by average percentile per million euros (most undervalued), or by age. A <span class="badge">Value pick</span> is a player in the top quartile of average percentile for the group whose market value is in the bottom half of the group.</p>
+
+    <h3>Data and credits</h3>
+    <ul>
+      <li><a href="https://github.com/dcaribou/transfermarkt-datasets">transfermarkt-datasets</a> (dcaribou), built from <a href="https://www.transfermarkt.com">Transfermarkt</a>: age, position, height, market value, contract expiry, appearances and match results.</li>
+      <li><a href="https://understat.com">Understat</a>, read with <a href="https://github.com/probberechts/soccerdata">soccerdata</a>: xG, xA, shots, key passes, xG chain and build-up. Direct FBref access was blocked, so Understat was used.</li>
+      <li>FBref tables published on Kaggle by hubertsidorowicz (<a href="https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2024-2025">2024/25</a>, <a href="https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2025-2026">2025/26</a>): tackles, interceptions, clearances, blocks, recoveries, aerial duels, progressive passes and goalkeeper stats.</li>
+      <li>Code and method: <a href="https://github.com/hasnain1241/fifa-career-mode-player-search">the repository</a> and its notebook.</li>
+    </ul>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>Only the Premier League, La Liga and Bundesliga are covered. Players from other leagues are not included.</li>
+      <li>FBref removed its advanced tables for 2025/26, so tackles, clearances, blocks, aerial duels and similar stats come from 2024/25 only. About 20 percent of defenders and midfielders (mostly new signings) lack them and are compared on the stats they have. Stats are per 90 and can be noisy over a small number of minutes.</li>
+      <li>Centre-back matches still lean on cards, fouls and height, which say little about playing style. A re-weighting is planned.</li>
+      <li>Goalkeeper matches use saves, shots faced, save percentage and goals conceded while on the pitch, which partly reflect the team.</li>
+      <li>Only the 20 closest matches per player are precomputed, so strict filters can hide most of them.</li>
+      <li>Market values, ages and contract dates are a snapshot from the data build. Some contract dates are out of date.</li>
+      <li>Similarity measures statistical style and level, not tactics, role instructions or league strength.</li>
+      <li>This project is not affiliated with EA, FIFA or any club.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap site-footer">
+  <p>Data from Transfermarkt datasets, Understat and FBref. Not affiliated with EA, FIFA or any club.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
