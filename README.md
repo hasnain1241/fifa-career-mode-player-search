@@ -10,6 +10,7 @@ All data is downloaded by the notebook and cached in `raw/` (not committed).
 - [transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets) (dcaribou, CC0), built from [Transfermarkt](https://www.transfermarkt.com): age, position, height, market value, contract expiry, club, appearances and match results.
 - [soccerdata](https://github.com/probberechts/soccerdata) (Apache 2.0): scraper library.
 - [FBref](https://fbref.com) is tried first. It blocks automated access, so the notebook falls back to [Understat](https://understat.com): xG, xA, npxG, shots, key passes, xG chain, xG buildup.
+- FBref snapshots on Kaggle by hubertsidorowicz ([2024/25](https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2024-2025), [2025/26](https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2025-2026)), downloaded anonymously: tackles, interceptions, clearances, blocks, recoveries, aerials, goalkeeper saves. Advanced FBref stats exist only for 2024/25.
 
 Check each site's terms before reusing data. Only derived per-90 values are exported.
 
@@ -21,7 +22,7 @@ Check each site's terms before reusing data. Only derived per-90 values are expo
 ## How it works
 Per-90 stats, compared only inside a position group (GK, CB, FB, DM/CM, AM/W, ST), standardised, ranked by RMS gap in z-scores. `similarity = 1 / (1 + rms_gap)`. KMeans (fixed k) labels roles.
 
-Defenders, midfielders and goalkeepers have no individual defensive stats in the working sources. They use Transfermarkt-derived signals (on-pitch goals conceded, clean sheets, cards, height), so they are flagged `limited` and carry team context.
+Defenders, midfielders and goalkeepers use the FBref Kaggle snapshots plus Transfermarkt-derived signals (cards, height, goalkeeper clean sheets). If the snapshots fail to download, those groups are flagged `limited`.
 
 ## Export schema
 `export/players.json`: list of records
