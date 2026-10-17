@@ -1,7 +1,7 @@
 # Raw data and caches
 raw/
-data/
-cache/
+/data/
+/cache/
 soccerdata/
 *.csv
 *.csv.gz
