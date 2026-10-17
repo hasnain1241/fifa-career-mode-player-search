@@ -44,6 +44,12 @@ Then open http://localhost:8000. The site uses only relative URLs, so it also wo
 - Values, ages and contracts are a snapshot from the data build.
 - Not affiliated with EA, FIFA or any club.
 
+## Next iteration
+- Down-weight cards, fouls and height in the similarity and in the match explanations, then re-run the notebook and refresh the exports.
+- Player pictures or mockups (needs a check on image licensing).
+- Possibly move deployment from GitHub Pages to Vercel.
+- More to be decided.
+
 ## Credits
 - [transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets) (dcaribou, CC0), built from [Transfermarkt](https://www.transfermarkt.com).
 - [Understat](https://understat.com) via [soccerdata](https://github.com/probberechts/soccerdata) (Apache 2.0).
