@@ -62,7 +62,6 @@
   let players = [], byId = new Map(), similar = {};
   const state = { mode: 'scout', selected: null, compare: null };
   const groupInfo = {};
-  let chart = null, radarKey = '';
 
   // ---------- load ----------
   async function load() {
@@ -219,6 +218,7 @@
   // ---------- rendering ----------
   function render() {
     updateFilterLabels();
+    document.querySelectorAll('#examples .chip-btn').forEach((b) => b.classList.toggle('on', Number(b.dataset.id) === state.selected));
     renderTabs();
     renderProfile();
     renderRadar();
@@ -243,28 +243,72 @@
     const box = $('profile');
     const p = byId.get(state.selected);
     if (!p) {
-      box.innerHTML = '<p class="muted">Search for a player, or open one from Find a signing.</p>';
+      box.innerHTML = '<div class="panel"><div class="step">Player</div><h2>No player selected</h2><p class="sub">Search for a player, or open one from Find a signing.</p></div>';
       return;
     }
     let contract = NA;
-    if (p.expiry) {
-      contract = p.contract_expiry + (p.expiry < TODAY ? ' (out of date)' : '');
-    }
+    if (p.expiry) contract = p.contract_expiry + (p.expiry < TODAY ? ' (out of date)' : '');
     const badges = [];
     if (p.valuePick) badges.push('<span class="badge">Value pick</span>');
-    if (p.profile_quality && p.profile_quality !== 'ok') badges.push('<span class="badge warn">Limited stats</span>');
-    if (p.stats_coverage != null && p.stats_coverage < 0.8) badges.push('<span class="badge warn">' + Math.round(p.stats_coverage * 100) + '% of stats available</span>');
+    if (p.profile_quality && p.profile_quality !== 'ok') badges.push('<span class="badge soft">Limited stats</span>');
+    if (p.stats_coverage != null && p.stats_coverage < 0.8) badges.push('<span class="badge soft">' + Math.round(p.stats_coverage * 100) + '% of stats available</span>');
+    const facts = [
+      ['Age', fmtAge(p.age)], ['Position', p.position || GROUP_NAMES[p.position_group]], ['Role', roleText(p)],
+      ['Market value', fmtEUR(p.market_value_eur)], ['Contract', contract],
+      ['Minutes', p.minutes != null ? p.minutes.toLocaleString('en') : NA]
+    ];
     box.innerHTML =
+      '<div class="player"><div class="mark" aria-hidden="true">' + esc(p.position_group) + '</div><div class="player-in">' +
+      '<div class="kicker">' + esc(p.club) + ' &middot; ' + esc(p.league) + '</div>' +
       '<h2>' + esc(p.name) + '</h2>' +
-      '<p class="pmeta">' + esc(p.club) + ' &middot; ' + esc(p.league) + '</p>' +
       (badges.length ? '<div class="badges">' + badges.join('') + '</div>' : '') +
-      '<dl class="facts">' +
-      fact('Age', fmtAge(p.age)) + fact('Position', p.position || GROUP_NAMES[p.position_group]) +
-      fact('Role', roleText(p)) + fact('Market value', fmtEUR(p.market_value_eur)) +
-      fact('Contract expiry', contract) + fact('Minutes (pooled)', p.minutes != null ? p.minutes.toLocaleString('en') : NA) +
-      '</dl>';
+      '<dl class="facts">' + facts.map(([k, v]) => '<div><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl>' +
+      '</div></div>';
   }
-  const fact = (k, v) => '<div><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>';
+
+  // SVG radar on the olive board
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function wrapLabel(text, max) {
+    const words = text.split(' '), lines = [];
+    let cur = '';
+    for (const w of words) {
+      if (cur && (cur + ' ' + w).length > max) { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function radarSVG(keys, p, c) {
+    const narrow = window.innerWidth < 560;
+    const N = keys.length, W = narrow ? 400 : 520, H = narrow ? 390 : 470, cx = W / 2, cy = H / 2 - 3, R = narrow ? 104 : 140;
+    const fs = narrow ? 13 : 12, lh = fs + 1;
+    const pt = (i, pct, r = R) => {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / N;
+      return [cx + r * pct / 100 * Math.cos(a), cy + r * pct / 100 * Math.sin(a), Math.cos(a)];
+    };
+    const poly = (src) => keys.map((k, i) => pt(i, src.pct[k] ?? 0).slice(0, 2).map((n) => n.toFixed(1)).join(',')).join(' ');
+    let g = '<g fill="none" stroke="#f5ead8" stroke-opacity=".3" stroke-width="1.5">';
+    [25, 50, 75, 100].forEach((f) => { g += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (R * f / 100) + '"></circle>'; });
+    keys.forEach((k, i) => { const e = pt(i, 100); g += '<line x1="' + cx + '" y1="' + cy + '" x2="' + e[0].toFixed(1) + '" y2="' + e[1].toFixed(1) + '"></line>'; });
+    g += '</g>';
+    g += '<polygon points="' + poly(p) + '" fill="#aebf92" fill-opacity=".45" stroke="#e1eecc" stroke-width="3" stroke-linejoin="round"></polygon>';
+    if (c) g += '<polygon points="' + poly(c) + '" fill="#d67f48" fill-opacity=".4" stroke="#f6a06b" stroke-width="3" stroke-linejoin="round"></polygon>';
+    const dots = (src, fill) => keys.map((k, i) => {
+      const q = pt(i, src.pct[k] ?? 0);
+      const tip = src.name + ', ' + label(k) + ': ' + (src.pct[k] == null ? NA : Math.round(src.pct[k]) + 'th percentile') + ' (' + fmtStat(k, src.stats[k]) + ')';
+      return '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="4.5" fill="' + fill + '"><title>' + esc(tip) + '</title></circle>';
+    }).join('');
+    g += dots(p, '#e1eecc');
+    if (c) g += dots(c, '#f6a06b');
+    keys.forEach((k, i) => {
+      const l = pt(i, 100, R + 16);
+      const anchor = Math.abs(l[2]) < 0.2 ? 'middle' : l[2] > 0 ? 'start' : 'end';
+      const lines = wrapLabel(label(k), narrow ? 13 : 15);
+      const y0 = l[1] + 4 - (Math.abs(l[2]) < 0.2 && l[1] < cy ? (lines.length - 1) * lh : 0);
+      g += '<text x="' + l[0].toFixed(1) + '" y="' + y0.toFixed(1) + '" text-anchor="' + anchor + '" font-size="' + fs + '" font-weight="600" fill="#f5ead8">' +
+        lines.map((t, n) => '<tspan x="' + l[0].toFixed(1) + '" dy="' + (n ? lh : 0) + '">' + esc(t) + '</tspan>').join('') + '</text>';
+    });
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Radar chart of percentile ranks within position group for ' + esc(p.name) + (c ? ' compared with ' + esc(c.name) : '') + '">' + g + '</svg>';
+  }
 
   function renderRadar() {
     const p = byId.get(state.selected);
@@ -273,88 +317,41 @@
     card.hidden = false;
     const c = state.compare != null ? byId.get(state.compare) : null;
     const keys = Object.keys(p.stats);
-    const labels = keys.map(label);
-    const ds = [{
-      label: p.name, data: keys.map((k) => p.pct[k] ?? 0), raw: keys.map((k) => p.stats[k]),
-      borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.22)', pointBackgroundColor: '#22c55e', borderWidth: 2
-    }];
-    if (c) {
-      ds.push({
-        label: c.name, data: keys.map((k) => c.pct[k] ?? 0), raw: keys.map((k) => c.stats[k]),
-        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.18)', pointBackgroundColor: '#f59e0b', borderWidth: 2
-      });
-    }
     $('clear-compare').hidden = !c;
-    if (typeof Chart === 'undefined') {
-      $('radar').replaceWith(Object.assign(document.createElement('p'), { id: 'radar', className: 'muted', textContent: 'Chart library failed to load. The table below has the same numbers.' }));
-    } else {
-      const cfg = {
-        type: 'radar',
-        data: { labels, datasets: ds },
-        options: {
-          responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
-          scales: {
-            r: {
-              min: 0, max: 100, ticks: { stepSize: 25, color: '#9cb3a7', backdropColor: 'transparent', font: { size: 10 } },
-              grid: { color: '#243a2e' }, angleLines: { color: '#243a2e' },
-              pointLabels: { color: '#e8f1ec', font: { size: window.innerWidth < 520 ? 9 : 11 } }
-            }
-          },
-          plugins: {
-            legend: { labels: { color: '#e8f1ec' } },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => {
-                  const k = keys[ctx.dataIndex];
-                  const raw = ctx.dataset.raw[ctx.dataIndex];
-                  const pct = raw == null ? NA : Math.round(ctx.parsed.r) + 'th percentile';
-                  return ctx.dataset.label + ': ' + pct + ' (' + fmtStat(k, raw) + ')';
-                }
-              }
-            }
-          }
-        }
-      };
-      const key = state.selected + '|' + state.compare;
-      if (!(chart && key === radarKey)) {
-        if (chart) { chart.destroy(); chart = null; }
-        chart = new Chart($('radar'), cfg);
-        radarKey = key;
-      }
-    }
-    // accessible table
+    $('legend').innerHTML = '<span><i style="background:var(--g-700)"></i>' + esc(p.name) + '</span>' +
+      (c ? '<span><i style="background:var(--a-600)"></i>' + esc(c.name) + '</span>' : '');
+    $('radar').innerHTML = radarSVG(keys, p, c);
     const rows = keys.map((k) => {
-      const pv = p.pct[k];
-      let cells = '<th scope="row">' + esc(label(k)) + '</th><td class="num">' + esc(fmtStat(k, p.stats[k])) + '</td>' +
-        '<td class="num">' + (pv == null ? NA : Math.round(pv)) + (pv == null ? '' : '<span class="bar" style="width:' + pv + '%"></span>') + '</td>';
-      if (c) {
-        const cv = c.pct[k];
-        cells += '<td class="num">' + esc(fmtStat(k, c.stats[k])) + '</td><td class="num">' + (cv == null ? NA : Math.round(cv)) + (cv == null ? '' : '<span class="bar cmp" style="width:' + cv + '%"></span>') + '</td>';
-      }
-      return '<tr>' + cells + '</tr>';
+      const pv = p.pct[k], cv = c ? c.pct[k] : null;
+      return '<tr><th scope="row">' + esc(label(k)) + '</th>' +
+        '<td class="num">' + esc(fmtStat(k, p.stats[k])) + (c ? '<span class="cmp">' + esc(fmtStat(k, c.stats[k])) + '</span>' : '') + '</td>' +
+        '<td class="pcell"><div class="pnums"><span>' + (pv == null ? NA : Math.round(pv)) + '</span>' + (c ? '<span class="c">' + (cv == null ? NA : Math.round(cv)) + '</span>' : '') + '</div>' +
+        '<div class="track"><div class="fill" style="width:' + (pv ?? 0) + '%"></div>' + (c ? '<div class="cfill" style="width:' + (cv ?? 0) + '%"></div>' : '') + '</div></td></tr>';
     }).join('');
-    const head = '<tr><th scope="col">Stat (per 90)</th><th scope="col" class="num">' + esc(p.name.split(' ').slice(-1)[0]) + '</th><th scope="col" class="num">Pct</th>' +
-      (c ? '<th scope="col" class="num">' + esc(c.name.split(' ').slice(-1)[0]) + '</th><th scope="col" class="num">Pct</th>' : '') + '</tr>';
-    $('stat-table').innerHTML = '<thead>' + head + '</thead><tbody>' + rows + '</tbody>';
+    $('stat-table').innerHTML = '<thead><tr><th scope="col">Stat (per 90)</th><th scope="col" class="num">Value</th><th scope="col">Percentile</th></tr></thead><tbody>' + rows + '</tbody>';
   }
 
   function chipHTML(keys) {
     return '<div class="chips">' + keys.map((k) => '<span class="chip">' + esc(label(k)) + '</span>').join('') + '</div>';
   }
 
-  function rowHTML(p, opts) {
-    const meta = [p.club, p.league, 'Age ' + fmtAge(p.age), p.position_group + ' ' + roleText(p), fmtEUR(p.market_value_eur)].map(esc).join(' &middot; ');
-    const badge = p.valuePick ? ' <span class="badge">Value pick</span>' : '';
-    return '<div class="top"><span class="name">' + esc(p.name) + badge + '</span><span class="score">' + esc(opts.right) + '</span></div>' +
-      '<div class="meta">' + meta + '</div>' + (opts.chips ? chipHTML(opts.chips) : '');
+  function rowBody(p, n, big, small, chips) {
+    const meta = [p.club, p.league, 'Age ' + fmtAge(p.age), fmtEUR(p.market_value_eur)].map(esc).join(' &middot; ');
+    const tag = p.valuePick ? '<span class="tag">Value pick</span>' : '';
+    return '<span class="shirt" aria-hidden="true">' + n + '</span>' +
+      '<span class="who"><span class="line"><b>' + esc(p.name) + '</b>' + tag + '</span>' +
+      '<span class="meta" style="display:block">' + meta + ' &middot; ' + esc(p.position_group) + ' ' + esc(roleText(p)) + '</span>' +
+      (chips ? chipHTML(chips) : '') + '</span>' +
+      '<span class="score"><span class="big">' + esc(big) + '</span> <span class="small">' + esc(small) + '</span></span>';
   }
 
   function renderSimilar() {
-    $('results-h').textContent = 'Similar players';
+    $('results-h').textContent = 'Team sheet';
+    $('results-sub').textContent = 'Ranked by style match. Tap a player to compare, or open their profile.';
     const list = $('results-list'), note = $('results-note'), count = $('results-count');
     list.innerHTML = '';
     const sel = byId.get(state.selected);
-    if (!sel) { count.textContent = ''; note.hidden = true; list.innerHTML = '<li class="muted">Pick a player to see look-alikes.</li>'; return; }
+    if (!sel) { count.textContent = ''; note.hidden = true; list.innerHTML = '<li class="empty">Pick a player to see look-alikes.</li>'; return; }
     const all = similar[String(sel.id)] || [];
     const f = getFilters();
     const rows = all.map((m) => ({ m, p: byId.get(m.id) })).filter((r) => r.p && passes(r.p, f));
@@ -364,14 +361,18 @@
       note.hidden = false;
       note.textContent = 'Filters hide ' + hidden + ' of the ' + all.length + ' precomputed matches. Only the 20 closest players per player are stored, so loosen the filters or use Find a signing for a wider search.';
     } else note.hidden = true;
-    if (!rows.length) { list.innerHTML = '<li class="muted">No matches left after filtering.</li>'; return; }
+    if (!rows.length) { list.innerHTML = '<li class="empty">No matches left after filtering.</li>'; return; }
     rows.forEach((r, i) => {
-      const li = document.createElement('li'); li.className = 'prow';
-      const main = document.createElement('button'); main.type = 'button'; main.className = 'main' + (state.compare === r.p.id ? ' active' : '');
-      main.setAttribute('aria-pressed', state.compare === r.p.id ? 'true' : 'false');
+      const on = state.compare === r.p.id;
+      const li = document.createElement('li'); li.className = 'row';
+      const main = document.createElement('button'); main.type = 'button'; main.className = 'main' + (on ? ' active' : '');
+      main.setAttribute('aria-pressed', on ? 'true' : 'false');
       main.setAttribute('aria-label', 'Compare ' + sel.name + ' with ' + r.p.name);
-      main.innerHTML = rowHTML(r.p, { right: (i + 1) + '. ' + Math.round(r.m.score * 100) + '%', chips: r.m.top });
-      main.addEventListener('click', () => { state.compare = state.compare === r.p.id ? null : r.p.id; render(); if (window.matchMedia('(max-width: 959px)').matches) $('radar-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      main.innerHTML = rowBody(r.p, i + 1, Math.round(r.m.score * 100) + '%', on ? 'Comparing' : 'Compare', r.m.top);
+      main.addEventListener('click', () => {
+        state.compare = on ? null : r.p.id; render();
+        if (window.matchMedia('(max-width: 959px)').matches) $('radar-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       const open = document.createElement('button'); open.type = 'button'; open.className = 'open'; open.textContent = 'Open';
       open.setAttribute('aria-label', 'Open profile of ' + r.p.name);
       open.addEventListener('click', () => { $('search').value = r.p.name; selectPlayer(r.p.id); });
@@ -390,6 +391,7 @@
   }
   function renderSigning() {
     $('results-h').textContent = 'Signing targets';
+    $('results-sub').textContent = 'Players from other clubs in the chosen group, ranked by your sort. Tap a player to open their profile.';
     const list = $('results-list'), note = $('results-note'), count = $('results-count');
     list.innerHTML = ''; note.hidden = true;
     const sort = $('s-sort').value;
@@ -400,13 +402,15 @@
       return (b.avgPct ?? -1) - (a.avgPct ?? -1);
     });
     count.textContent = pool.length + ' players' + (pool.length > MAX_SIGN_ROWS ? ' (showing ' + MAX_SIGN_ROWS + ')' : '');
-    if (!pool.length) { list.innerHTML = '<li class="muted">No players match these settings.</li>'; return; }
+    if (!pool.length) { list.innerHTML = '<li class="empty">No players match these settings.</li>'; return; }
     pool.slice(0, MAX_SIGN_ROWS).forEach((p, i) => {
-      const li = document.createElement('li'); li.className = 'prow';
+      const li = document.createElement('li'); li.className = 'row';
       const main = document.createElement('button'); main.type = 'button'; main.className = 'main' + (state.selected === p.id ? ' active' : '');
-      const right = sort === 'value' ? (valueScore(p) < 0 ? NA : valueScore(p).toFixed(1) + ' pct/€M')
-        : sort === 'young' ? 'Age ' + fmtAge(p.age) : (p.avgPct == null ? NA : 'Avg pct ' + Math.round(p.avgPct));
-      main.innerHTML = rowHTML(p, { right: (i + 1) + '. ' + right });
+      let big, small;
+      if (sort === 'value') { big = valueScore(p) < 0 ? NA : valueScore(p).toFixed(1); small = 'pct per €M'; }
+      else if (sort === 'young') { big = fmtAge(p.age); small = 'years'; }
+      else { big = p.avgPct == null ? NA : String(Math.round(p.avgPct)); small = 'avg pct'; }
+      main.innerHTML = rowBody(p, i + 1, big, small, null);
       main.setAttribute('aria-label', 'Open profile of ' + p.name);
       main.addEventListener('click', () => selectPlayer(p.id));
       li.appendChild(main); list.appendChild(li);
@@ -448,14 +452,12 @@
 
     const ex = $('examples');
     const picks = ['Odegaard', 'Rodri', 'Haaland', 'Van Dijk', 'Yamal'].map((n) => search(n)[0]).filter(Boolean);
-    if (picks.length) {
-      ex.append('Try: ');
-      picks.forEach((p) => {
-        const b = document.createElement('button'); b.type = 'button'; b.className = 'link-btn'; b.textContent = p.name;
-        b.addEventListener('click', () => { $('search').value = p.name; selectPlayer(p.id); });
-        ex.appendChild(b);
-      });
-    }
+    picks.forEach((p) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip-btn'; b.textContent = p.name; b.dataset.id = p.id;
+      b.addEventListener('click', () => { $('search').value = p.name; selectPlayer(p.id); });
+      ex.appendChild(b);
+    });
+    let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderRadar, 150); });
     window.addEventListener('hashchange', () => { applyHash(); render(); });
   }
 

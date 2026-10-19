@@ -8,7 +8,7 @@ A FIFA career mode style scouting tool. Pick a player and get the closest matche
 |---|---|
 | ![Desktop screenshot](docs/screenshots/desktop.png) | ![Mobile screenshot](docs/screenshots/mobile.png) |
 
-The site is static (plain HTML, CSS and vanilla JS, Chart.js for the radar). All filtering and ranking runs in the browser from two JSON files.
+The site is static (plain HTML, CSS and vanilla JS, with an inline SVG radar). The look follows the "Organic" design (cream and terracotta with an olive pitch header). All filtering and ranking runs in the browser from two JSON files.
 
 ## How the data was built
 The model lives in [notebooks/scouting_model.ipynb](notebooks/scouting_model.ipynb) and is meant to run on Kaggle with Internet on. It downloads everything from the original sources, caches it, and writes `players.json` and `similar_players.json`.
@@ -54,6 +54,6 @@ Then open http://localhost:8000. The site uses only relative URLs, so it also wo
 - [transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets) (dcaribou, CC0), built from [Transfermarkt](https://www.transfermarkt.com).
 - [Understat](https://understat.com) via [soccerdata](https://github.com/probberechts/soccerdata) (Apache 2.0).
 - FBref tables published on Kaggle by hubertsidorowicz: [2024/25](https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2024-2025), [2025/26](https://www.kaggle.com/datasets/hubertsidorowicz/football-players-stats-2025-2026). FBref itself blocked direct access.
-- [Chart.js](https://www.chartjs.org) (MIT).
+- Fonts: Caprasimo and Figtree (SIL Open Font License), self-hosted in `docs/fonts/`.
 
 Check each source's terms before reusing the data. Only derived per-90 values are published here.
